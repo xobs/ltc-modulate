@@ -1,0 +1,6 @@
+[package]
+name = "ltc-modulate"
+version = "0.1.0"
+authors = ["Sean Cross <sean@xobs.io>"]
+
+[dependencies]
