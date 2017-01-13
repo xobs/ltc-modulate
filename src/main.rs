@@ -1,5 +1,6 @@
 mod fsk;
-mod modulate;
+mod modulator;
+mod controller;
 
 fn main() {
     println!("Hello, world!");

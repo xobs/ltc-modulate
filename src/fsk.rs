@@ -21,7 +21,7 @@ pub struct FskEncoder {
 
 impl FskEncoder {
 
-    pub fn new_fsk(f_hi: u32, f_lo: u32, baud_rate: u32, sample_rate: u32) -> FskEncoder {
+    pub fn new(f_hi: u32, f_lo: u32, baud_rate: u32, sample_rate: u32) -> FskEncoder {
         FskEncoder {
             f_hi: f_hi,
             f_lo: f_lo,

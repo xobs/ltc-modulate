@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Sean Cross <sean@xobs.io>"]
 
 [dependencies]
+murmur3 = "*"
+md5 = "*"
+byteorder = "*"

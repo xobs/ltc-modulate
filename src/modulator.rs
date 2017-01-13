@@ -1,6 +1,51 @@
 use std;
 use std::f64;
 use fsk;
+
+pub struct Modulator {
+    encoder: fsk::FskEncoder,
+    rate: u32,
+    /*
+            encoder: null, // FskEncoder object
+        outputAudioBuffer: null, // AudioBuffer object
+        uiCallback: null, // UI object for callback
+        scriptNode: null, // Re-used script node object for audio generation
+        can_stop: true, // Whether we can stop (usually we can)
+        if (!params)
+            params = new Object();
+
+        if ("rate" in params)
+            this.rate = params.rate;
+
+//    this.encoder = new FskEncoder(this.rate);
+    fsk: FskEncoder,
+    */
+}
+
+impl Modulator {
+    pub fn new(rate: u32) -> Modulator {
+        let modulator = Modulator {
+            encoder: fsk::FskEncoder::new(8666, 12500, 8000, rate),
+            rate: rate,
+        };
+
+        modulator
+    }
+
+    /* Modulate an array of 8-bit bytes into an array of signed 16-bit PCM samples */
+    pub fn modulate_pcm(&mut self, input: Vec<u8>) -> Vec<i16> {
+
+        let modulated = self.encoder.modulate(input);
+        let mut output: Vec<i16> = Vec::new();
+
+        for sample in modulated.iter() {
+            // Map -1 .. 1 to -32767 .. 32768
+            output.push((sample * 32767.0) as i16);
+        }
+
+        output
+    }
+}
 /*
 (function(window) {
     'use strict';

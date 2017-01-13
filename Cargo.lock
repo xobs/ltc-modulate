@@ -1,4 +1,37 @@
 [root]
 name = "ltc-modulate"
 version = "0.1.0"
+dependencies = [
+ "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "md5 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "murmur3 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
+[[package]]
+name = "byteorder"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "byteorder"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "md5"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "murmur3"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[metadata]
+"checksum byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "0fc10e8cc6b2580fda3f36eb6dc5316657f812a3df879a44a66fc9f0fdbc4855"
+"checksum byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c40977b0ee6b9885c9013cd41d9feffdd22deb3bb4dc3a71d901cc7a77de18c8"
+"checksum md5 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6fce5a83f1379e0a2353a8ac5d15270d417ad36c6ac78ea4d4beae7482e6812d"
+"checksum murmur3 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ece7fe85164ffce69891c581b6b035a3c2f66dd3459f299d43d5efff90663e22"
