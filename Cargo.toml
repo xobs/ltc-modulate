@@ -5,5 +5,5 @@ authors = ["Sean Cross <sean@xobs.io>"]
 
 [dependencies]
 murmur3 = "*"
-md5 = "*"
+rust-crypto = "*"
 byteorder = "*"
