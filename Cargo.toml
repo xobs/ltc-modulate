@@ -7,3 +7,4 @@ authors = ["Sean Cross <sean@xobs.io>"]
 murmur3 = "*"
 rust-crypto = "*"
 byteorder = "*"
+clap = "*"
