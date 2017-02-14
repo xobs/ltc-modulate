@@ -191,7 +191,8 @@ impl Controller {
         let mut audio = self.make_silence(500);
         output.append(&mut audio);
 
-        for packet_num in 0..blocks {
+        for mut packet_num in 0..blocks {
+            packet_num = packet_num & 0xff;
             let slice_start = packet_num * 256;
             let mut packet_data: Vec<u8> = vec![];
             for i in 0..256 {
