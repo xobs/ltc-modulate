@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Sean Cross <sean@xobs.io>"]
 
 [dependencies]
-murmur3 = "*"
-rust-crypto = "*"
-byteorder = "*"
-clap = "*"
+murmur3 = "0.3.0"
+rust-crypto = "0.2.36"
+byteorder = "1.0.0"
+clap = "2.19.3"
+elf = "0.0.10"
