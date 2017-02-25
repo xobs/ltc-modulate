@@ -11,6 +11,7 @@ use self::byteorder::{LittleEndian, WriteBytesExt};
 
 pub struct Controller {
     rate: f64,
+    os_update: bool,
     modulator: modulator::Modulator,
 }
 
@@ -27,25 +28,47 @@ const PROTOCOL_VERSION: u8 = 0x01;
 /* Packet types */
 const CONTROL_PACKET: u8 = 0x01;
 const DATA_PACKET: u8 = 0x02;
+const CONTROL_OS_PACKET: u8 = 0x03;
+const DATA_OS_PACKET: u8 = 0x04;
 
 impl Controller {
 
-    pub fn new(rate: f64) -> Controller {
+    pub fn new(rate: f64, os_update: bool) -> Controller {
         Controller {
             rate: rate,
+            os_update: os_update,
             modulator: modulator::Modulator::new(rate),
         }
     }
 
     pub fn make_control_header(&mut self) -> Vec<u8> {
         vec!(0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42,
-             PROTOCOL_VERSION, CONTROL_PACKET, 0x00, 0x00)
+             PROTOCOL_VERSION,
+             CONTROL_PACKET,
+             0x00,
+             0x00)
     }
 
     pub fn make_data_header(&mut self, block_number: u16) -> Vec<u8> {
         vec!(0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42,
              PROTOCOL_VERSION,
              DATA_PACKET,
+             (block_number & 0xff) as u8,
+             ((block_number >> 8) & 0xff) as u8)
+    }
+
+    pub fn make_control_os_header(&mut self) -> Vec<u8> {
+        vec!(0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42,
+             PROTOCOL_VERSION,
+             CONTROL_OS_PACKET,
+             0x00,
+             0x00)
+    }
+
+    pub fn make_data_os_header(&mut self, block_number: u16) -> Vec<u8> {
+        vec!(0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42,
+             PROTOCOL_VERSION,
+             DATA_OS_PACKET,
              (block_number & 0xff) as u8,
              ((block_number >> 8) & 0xff) as u8)
     }
@@ -70,7 +93,11 @@ impl Controller {
 
         let mut packet = vec![];
 
-        let control_header = self.make_control_header();
+        let control_header = if self.os_update {
+            self.make_control_os_header()
+        } else {
+            self.make_control_header()
+        };
         self.append_data(&mut packet, control_header);
 
         let mut program_length = vec![];
@@ -101,7 +128,11 @@ impl Controller {
     pub fn make_data_packet(&mut self, data_in: &Vec<u8>, block_num: u16) -> Vec<u8> {
         let mut packet = vec![];
         let mut data = data_in.clone();
-        let data_header = self.make_data_header(block_num);
+        let data_header = if self.os_update {
+            self.make_data_os_header(block_num)
+        } else {
+            self.make_data_header(block_num)
+        };
         let data_header_len = data_header.len();
         self.append_data(&mut packet, data_header);
 

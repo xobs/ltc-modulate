@@ -10,8 +10,8 @@ use clap::{Arg, App};
 use std::io::prelude::*;
 use std::fs::File;
 
-fn do_modulation(source_filename: &str, target_filename: &str) -> std::io::Result<()> {
-    let mut controller = controller::Controller::new(44100.0);
+fn do_modulation(source_filename: &str, target_filename: &str, os_update: bool) -> std::io::Result<()> {
+    let mut controller = controller::Controller::new(44100.0, os_update);
 
     let input_data = match elf::File::open_path(source_filename) {
         Ok(e) => {
@@ -73,11 +73,17 @@ fn main() {
                                 .help("Name of the wave file to write to")
                                 .required(true)
                         )
+                        .arg(Arg::with_name("UPDATE")
+                                .short("u")
+                                .long("update")
+                                .help("Generate an OS update waveform")
+                        )
                         .get_matches();
 
     let source_filename = matches.value_of("INPUT").unwrap();
     let target_filename = matches.value_of("OUTPUT").unwrap();
-    let res = do_modulation(source_filename, target_filename);
+    let os_update = matches.value_of("UPDATE").is_some();
+    let res = do_modulation(source_filename, target_filename, os_update);
     if res.is_err() {
         let err = res.err().unwrap();
         println!("Unable to modulate: {}", &err);
