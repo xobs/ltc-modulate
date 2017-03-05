@@ -10,8 +10,16 @@ use clap::{Arg, App};
 use std::io::prelude::*;
 use std::fs::File;
 
-fn do_modulation(source_filename: &str, target_filename: &str, os_update: bool) -> std::io::Result<()> {
-    let mut controller = controller::Controller::new(44100.0, os_update);
+fn do_modulation(source_filename: &str, target_filename: &str,
+                 data_rate: u32, os_update: bool, stripe: controller::DataStripePattern) -> std::io::Result<()> {
+
+    let sample_rate = match data_rate {
+        0 => 44100.0 * 4.0,
+        1 => 44100.0 * 2.0,
+        2 => 44100.0 * 1.0,
+        r => panic!("Unrecognized data rate: {}", r),
+    };
+    let mut controller = controller::Controller::new(sample_rate, os_update, stripe);
 
     let input_data = match elf::File::open_path(source_filename) {
         Ok(e) => {
@@ -47,7 +55,10 @@ fn do_modulation(source_filename: &str, target_filename: &str, os_update: bool) 
     };
     let mut audio_data: Vec<i16> = vec![];
 
-    controller.encode(&input_data, &mut audio_data);
+    controller.encode(&input_data, &mut audio_data, data_rate);
+    let mut pilot_controller = controller::Controller::new(44100.0, os_update, stripe);
+    pilot_controller.pilot(&mut audio_data, data_rate);
+    controller.encode(&input_data, &mut audio_data, data_rate);
 
     try!(wav::write_wav(44100, &audio_data, target_filename));
     Ok(())
@@ -73,19 +84,47 @@ fn main() {
                                 .help("Name of the wave file to write to")
                                 .required(true)
                         )
+                        .arg(Arg::with_name("V1")
+                                .short("1")
+                                .long("version1")
+                                .value_name("VERSION1")
+                                .help("Generate a v1 audio file")
+                        )
                         .arg(Arg::with_name("UPDATE")
                                 .short("u")
                                 .long("update")
                                 .help("Generate an OS update waveform")
                         )
+                        .arg(Arg::with_name("LOWRATE")
+                                .short("l")
+                                .long("lowrate")
+                                .help("Sets low rate mode")
+                        )
+                        .arg(Arg::with_name("MIDRATE")
+                                .short("m")
+                                .long("midrate")
+                                .help("Sets mid rate mode")
+                        )
                         .get_matches();
+
+    let data_rate = if matches.is_present("LOWRATE") {
+        0
+    } else if matches.is_present("MIDRATE") {
+        1
+    } else {
+        2
+    };
 
     let source_filename = matches.value_of("INPUT").unwrap();
     let target_filename = matches.value_of("OUTPUT").unwrap();
     let os_update = matches.value_of("UPDATE").is_some();
-    let res = do_modulation(source_filename, target_filename, os_update);
-    if res.is_err() {
-        let err = res.err().unwrap();
+    let stripe_version = if matches.is_present("VERSION1") {
+        controller::DataStripePattern::V1
+    } else {
+        controller::DataStripePattern::V2
+    };
+
+    if let Err(err) = do_modulation(source_filename, target_filename, data_rate, os_update, stripe_version) {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }

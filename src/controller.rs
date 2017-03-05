@@ -9,10 +9,21 @@ use self::crypto::digest::Digest;
 use std::io::Cursor;
 use self::byteorder::{LittleEndian, WriteBytesExt};
 
+/// Which version of the data strip pattern is used
+#[derive(Clone, Copy)]
+pub enum DataStripePattern {
+    /// Original v1 (0xaa, 0x55)
+    V1,
+
+    /// Improved v2 (0x35, 0xac, 0x95)
+    V2,
+}
+
 pub struct Controller {
     rate: f64,
     os_update: bool,
     modulator: modulator::Modulator,
+    data_stripe_pattern: DataStripePattern,
 }
 
 /* Preamble sent before every audio packet */
@@ -33,10 +44,11 @@ const DATA_OS_PACKET: u8 = 0x04;
 
 impl Controller {
 
-    pub fn new(rate: f64, os_update: bool) -> Controller {
+    pub fn new(rate: f64, os_update: bool, stripe_type: DataStripePattern) -> Controller {
         Controller {
             rate: rate,
             os_update: os_update,
+            data_stripe_pattern: stripe_type,
             modulator: modulator::Modulator::new(rate),
         }
     }
@@ -85,6 +97,7 @@ impl Controller {
         data_cursor.set_position(7); // seek past the data header
         let data_hash_32 = murmur3::murmur3_32(&mut data_cursor, hash);
         let mut data_hash = vec![];
+        println!("data hash: {:x}", data_hash_32);
         data_hash.write_u32::<LittleEndian>(data_hash_32).unwrap();
         data_hash
     }
@@ -150,13 +163,36 @@ impl Controller {
         // After the hash has been computed, stripe the data portion
         // with a pattern of 0x55 and 0xaa.  This provides some level
         // of DC balance, even at the end where we have lots of 0xff.
-        for i in 0..data_len {
-            if (i % 16) == 3 {
-                packet[i + data_header_len] = packet[i + data_header_len] ^ 0x55;
-            } else if (i % 16) == 11 {
-                packet[i + data_header_len] = packet[i + data_header_len] ^ 0xaa;
-            }
+
+        match self.data_stripe_pattern {
+            DataStripePattern::V1 => {
+                for i in 0..data_len {
+                    if (i % 16) == 3 {
+                        packet[i + data_header_len] = packet[i + data_header_len] ^ 0x55;
+                    } else if (i % 16) == 11 {
+                        packet[i + data_header_len] = packet[i + data_header_len] ^ 0xaa;
+                    }
+                }
+            },
+
+            DataStripePattern::V2 =>
+                // modulate the packet # and payload
+                // so skip preamble + version + type (7 bytes preamble + 1 byte version + 1 byte type = 9)
+                // and then "add 2" in the modular math loop because on the demod side we are 2-offset
+                // also skip capping hash
+                // for some reason, the Rust version puts 2 bytes 0xff pad, which isn't necessary
+                // hence the end is 6 bytes off set (4 bytes hash + 2 bytes pad)
+                for i in 9..(packet.len() - 6) {
+                    if ((i-9+2) % 3) == 0 {
+                        packet[i] = packet[i] ^ 0x35;
+                    } else if ((i-9+2) % 3) == 1 {
+                        packet[i] = packet[i] ^ 0xac;
+                    } else if ((i-9+2) % 3) == 2 {
+                        packet[i] = packet[i] ^ 0x95;
+                    }
+                },
         }
+
         packet
     }
 /*
@@ -198,20 +234,59 @@ impl Controller {
         buffer
     }
 
-    pub fn encode(&mut self, input: &Vec<u8>, output: &mut Vec<i16>) {
+    pub fn make_zero(&mut self, number: u32) -> Vec<u8> {
+        let mut buffer: Vec<u8> = vec![];
+
+        buffer.resize( (number / 8) as usize, 0);
+
+        buffer
+    }
+
+    /*
+    pub fn make_one(&mut self, number: u32) -> Vec<u8> {
+        let mut buffer: Vec<u8> = vec![];
+
+        buffer.resize( (number / 8) as usize, 0xff);
+
+        buffer
+    }*/
+
+    pub fn pilot(&mut self, output: &mut Vec<i16>, rate: u32) {
+        if rate == 0 {
+            // low rate preamble
+            let data = self.make_zero(4000); // ~0.5secs
+            let mut audio = self.modulator.modulate_pcm(&data);
+            output.append(&mut audio);
+        } else {
+            // high rate preamble
+            /* // no preamble at high rate, this is the default
+            let data = self.make_one(3000); // ~0.5secs
+            let mut audio = self.modulator.modulate_pcm(&data);
+            output.append(&mut audio);
+             */
+        }
+    }
+    
+    pub fn encode(&mut self, input: &Vec<u8>, output: &mut Vec<i16>, rate: u32) {
+        let mut silence_divisor = 1;
+        if rate == 0 {
+            silence_divisor = 4;
+        } else if rate == 1 {
+            silence_divisor = 2;
+        }
         let file_length = input.len();
 
         /* Note: Maximum of 65536 blocks */
         let blocks = ((file_length as f64 / 256.0).ceil()) as u16;
 
-        let mut audio = self.make_silence(250);
+        let mut audio = self.make_silence(250 / silence_divisor);
         output.append(&mut audio);
 
         let data = self.make_control_packet(&input);
         let mut audio = self.modulator.modulate_pcm(&data);
         output.append(&mut audio);
 
-        let mut audio = self.make_silence(100);
+        let mut audio = self.make_silence(100 / silence_divisor);
         output.append(&mut audio);
 
         // Make two header packets
@@ -219,7 +294,7 @@ impl Controller {
         let mut audio = self.modulator.modulate_pcm(&data);
         output.append(&mut audio);
 
-        let mut audio = self.make_silence(500);
+        let mut audio = self.make_silence(500 / silence_divisor);
         output.append(&mut audio);
 
         for mut packet_num in 0..blocks {
@@ -239,11 +314,11 @@ impl Controller {
             let mut audio = self.modulator.modulate_pcm(&data);
             output.append(&mut audio);
 
-            let mut audio = self.make_silence(80);
+            let mut audio = self.make_silence(80 / silence_divisor);
             output.append(&mut audio);
         }
 
-        let mut audio = self.make_silence(500);
+        let mut audio = self.make_silence(500 / silence_divisor);
         output.append(&mut audio);
     }
     /*
