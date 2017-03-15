@@ -1,6 +1,6 @@
 [package]
 name = "ltc-modulate"
-version = "0.1.0"
+version = "0.2.0"
 description = "Modulate a binary file for uplaoding to a Chibitronics Love-to-Code sticker"
 authors = ["Sean Cross <sean@xobs.io>"]
 license = "MIT"
