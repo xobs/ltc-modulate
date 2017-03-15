@@ -10,7 +10,7 @@ use std::io::Cursor;
 use self::byteorder::{LittleEndian, WriteBytesExt};
 
 /// Which version of the data strip pattern is used
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DataStripePattern {
     /// Original v1 (0xaa, 0x55)
     V1,
@@ -97,7 +97,6 @@ impl Controller {
         data_cursor.set_position(7); // seek past the data header
         let data_hash_32 = murmur3::murmur3_32(&mut data_cursor, hash);
         let mut data_hash = vec![];
-        println!("data hash: {:x}", data_hash_32);
         data_hash.write_u32::<LittleEndian>(data_hash_32).unwrap();
         data_hash
     }
