@@ -66,10 +66,10 @@ fn do_modulation(source_filename: &str, target_filename: &str,
 
 fn main() {
     let matches = App::new("Love-to-Code Program Modulator")
-                        .version("1.0")
+                        .version("1.1")
                         .author("Sean Cross <sean@xobs.io>")
                         .about("Takes compiled code and modulates it for a Love-to-Code sticker")
-                        .arg(Arg::with_name("INPUT")
+                        .arg(Arg::with_name("input")
                                 .short("i")
                                 .long("input")
                                 .value_name("FILENAME")
@@ -77,54 +77,67 @@ fn main() {
                                 .takes_value(true)
                                 .required(true)
                         )
-                        .arg(Arg::with_name("OUTPUT")
+                        .arg(Arg::with_name("output")
                                 .short("o")
                                 .long("output")
                                 .value_name("FILENAME")
                                 .help("Name of the wave file to write to")
                                 .required(true)
                         )
-                        .arg(Arg::with_name("V1")
-                                .short("1")
-                                .long("version1")
-                                .value_name("VERSION1")
-                                .help("Generate a v1 audio file")
+                        .arg(Arg::with_name("version")
+                                .short("s")
+                                .long("stripe-version")
+                                .value_name("VERSION")
+                                .takes_value(true)
+                                .possible_values(&["1", "2"])
+                                .default_value("2")
+                                .help("Data striping version")
                         )
-                        .arg(Arg::with_name("UPDATE")
+                        .arg(Arg::with_name("update")
                                 .short("u")
                                 .long("update")
+                                .takes_value(false)
                                 .help("Generate an OS update waveform")
                         )
-                        .arg(Arg::with_name("LOWRATE")
-                                .short("l")
-                                .long("lowrate")
-                                .help("Sets low rate mode")
-                        )
-                        .arg(Arg::with_name("MIDRATE")
-                                .short("m")
-                                .long("midrate")
-                                .help("Sets mid rate mode")
+                        .arg(Arg::with_name("rate")
+                                .short("r")
+                                .long("rate")
+                                .possible_values(&["high", "mid", "low"])
+                                .value_name("RATE")
+                                .takes_value(true)
+                                .default_value("high")
+                                .help("Audio encoding rate")
                         )
                         .get_matches();
 
-    let data_rate = if matches.is_present("LOWRATE") {
-        0
-    } else if matches.is_present("MIDRATE") {
-        1
-    } else {
-        2
+    let source_filename = matches.value_of("input").unwrap();
+    let target_filename = matches.value_of("output").unwrap();
+    let os_update = matches.is_present("update");
+    let stripe_version = match matches.value_of("version") {
+        Some("1") => controller::DataStripePattern::V1,
+        Some("2") => controller::DataStripePattern::V2,
+        Some(x) => panic!("Unrecognized version found: {}", x),
+        None => panic!("No data encoding version specified"),
+    };
+    let data_rate = match matches.value_of("rate") {
+        Some("low") => 0,
+        Some("mid") => 1,
+        Some("high") => 2,
+        Some(x) => panic!("Unrecognized rate found: {}", x),
+        None => panic!("No valid rate specified"),
     };
 
-    let source_filename = matches.value_of("INPUT").unwrap();
-    let target_filename = matches.value_of("OUTPUT").unwrap();
-    let os_update = matches.value_of("UPDATE").is_some();
-    let stripe_version = if matches.is_present("VERSION1") {
-        controller::DataStripePattern::V1
-    } else {
-        controller::DataStripePattern::V2
-    };
+    println!("Modulating {} into {}.", source_filename, target_filename);
+    println!("Is update? {}  Data rate: {}  Stripe version: {:?}",
+            os_update,
+            data_rate,
+            stripe_version);
 
-    if let Err(err) = do_modulation(source_filename, target_filename, data_rate, os_update, stripe_version) {
+    if let Err(err) = do_modulation(source_filename,
+                                    target_filename,
+                                    data_rate,
+                                    os_update,
+                                    stripe_version) {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }
