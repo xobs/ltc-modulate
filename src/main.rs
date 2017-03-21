@@ -87,7 +87,7 @@ fn main() {
             .help("Name of the wave file to write to")
             .required(true))
         .arg(Arg::with_name("version")
-            .short("s")
+            .short("p")
             .long("protocol-version")
             .value_name("VERSION")
             .takes_value(true)
