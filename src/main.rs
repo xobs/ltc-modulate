@@ -70,7 +70,7 @@ fn do_modulation(source_filename: &str,
 
 fn main() {
     let matches = App::new("Love-to-Code Program Modulator")
-        .version("1.1")
+        .version("1.2")
         .author("Sean Cross <sean@xobs.io>")
         .about("Takes compiled code and modulates it for a Love-to-Code sticker")
         .arg(Arg::with_name("input")
