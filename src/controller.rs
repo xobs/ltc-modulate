@@ -19,6 +19,15 @@ pub enum ProtocolVersion {
     V2,
 }
 
+impl ProtocolVersion {
+    pub fn as_num(&self) -> u8 {
+        match self {
+            &ProtocolVersion::V1 => 1,
+            &ProtocolVersion::V2 => 2,
+        }
+    }
+}
+
 pub struct Controller {
     rate: f64,
     os_update: bool,
@@ -31,10 +40,6 @@ pub struct Controller {
 
 // Stop bits, sent to pad the end of transmission
 // const stop_bytes_const: [u8; 1] = [0xff];
-
-
-// Protocol version, currently v1.0
-const PROTOCOL_VERSION: u8 = 0x01;
 
 // Packet types
 const CONTROL_PACKET: u8 = 0x01;
@@ -52,11 +57,7 @@ impl Controller {
         }
     }
 
-    pub fn make_control_header(&mut self) -> Vec<u8> {
-        vec![0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42, PROTOCOL_VERSION, CONTROL_PACKET, 0x00, 0x00]
-    }
-
-    pub fn make_data_header(&mut self, block_number: u16) -> Vec<u8> {
+    pub fn make_control_header(&self) -> Vec<u8> {
         vec![0x00,
              0x00,
              0x00,
@@ -64,13 +65,27 @@ impl Controller {
              0xaa,
              0x55,
              0x42,
-             PROTOCOL_VERSION,
+             self.protocol_version.as_num(),
+             CONTROL_PACKET,
+             0x00,
+             0x00]
+    }
+
+    pub fn make_data_header(&self, block_number: u16) -> Vec<u8> {
+        vec![0x00,
+             0x00,
+             0x00,
+             0x00,
+             0xaa,
+             0x55,
+             0x42,
+             self.protocol_version.as_num(),
              DATA_PACKET,
              (block_number & 0xff) as u8,
              ((block_number >> 8) & 0xff) as u8]
     }
 
-    pub fn make_control_os_header(&mut self) -> Vec<u8> {
+    pub fn make_control_os_header(&self) -> Vec<u8> {
         vec![0x00,
              0x00,
              0x00,
@@ -78,13 +93,13 @@ impl Controller {
              0xaa,
              0x55,
              0x42,
-             PROTOCOL_VERSION,
+             self.protocol_version.as_num(),
              CONTROL_OS_PACKET,
              0x00,
              0x00]
     }
 
-    pub fn make_data_os_header(&mut self, block_number: u16) -> Vec<u8> {
+    pub fn make_data_os_header(&self, block_number: u16) -> Vec<u8> {
         vec![0x00,
              0x00,
              0x00,
@@ -92,7 +107,7 @@ impl Controller {
              0xaa,
              0x55,
              0x42,
-             PROTOCOL_VERSION,
+             self.protocol_version.as_num(),
              DATA_OS_PACKET,
              (block_number & 0xff) as u8,
              ((block_number >> 8) & 0xff) as u8]
