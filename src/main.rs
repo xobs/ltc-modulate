@@ -60,7 +60,7 @@ fn do_modulation(source_filename: &str,
     let mut audio_data: Vec<i16> = vec![];
 
     controller.encode(&input_data, &mut audio_data, data_rate);
-    let mut pilot_controller = controller::Controller::new(44100.0, os_update, stripe);
+    let mut pilot_controller = controller::Controller::new(44100.0, os_update, version);
     pilot_controller.pilot(&mut audio_data, data_rate);
     controller.encode(&input_data, &mut audio_data, data_rate);
 
