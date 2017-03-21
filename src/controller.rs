@@ -197,10 +197,8 @@ impl Controller {
                 // modulate the packet # and payload
                 // so skip preamble + version + type (7 bytes preamble + 1 byte version + 1 byte type = 9)
                 // and then "add 2" in the modular math loop because on the demod side we are 2-offset
-                // also skip capping hash
-                // for some reason, the Rust version puts 2 bytes 0xff pad, which isn't necessary
-                // hence the end is 6 bytes off set (4 bytes hash + 2 bytes pad)
-                for i in 9..(packet.len() - 6) {
+                // also skip capping hash and stop bytes
+                for i in (self.preamble.len() + 2)..(packet.len() - (4 + self.stop_bytes.len())) {
                     if ((i-9+2) % 3) == 0 {
                         packet[i] = packet[i] ^ 0x35;
                     } else if ((i-9+2) % 3) == 1 {
