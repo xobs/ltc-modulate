@@ -10,8 +10,12 @@ use clap::{Arg, App};
 use std::io::prelude::*;
 use std::fs::File;
 
-fn do_modulation(source_filename: &str, target_filename: &str,
-                 data_rate: u32, os_update: bool, stripe: controller::DataStripePattern) -> std::io::Result<()> {
+fn do_modulation(source_filename: &str,
+                 target_filename: &str,
+                 data_rate: u32,
+                 os_update: bool,
+                 stripe: controller::DataStripePattern)
+                 -> std::io::Result<()> {
 
     let sample_rate = match data_rate {
         0 => 44100.0 * 4.0,
@@ -38,14 +42,14 @@ fn do_modulation(source_filename: &str, target_filename: &str,
             for section in e.sections {
                 // It's unclear what exactly should be included,
                 // but this seems to produce the correct output.
-                if section.shdr.shtype == elf::types::SHT_PROGBITS
-                && section.shdr.flags != elf::types::SHF_NONE 
-                && section.shdr.addr != 0 {
+                if section.shdr.shtype == elf::types::SHT_PROGBITS &&
+                   section.shdr.flags != elf::types::SHF_NONE &&
+                   section.shdr.addr != 0 {
                     data.extend(section.data);
                 }
             }
             data
-        },
+        }
         Err(_) => {
             let mut input = try!(File::open(source_filename));
             let mut input_data: Vec<u8> = vec![];
@@ -66,49 +70,44 @@ fn do_modulation(source_filename: &str, target_filename: &str,
 
 fn main() {
     let matches = App::new("Love-to-Code Program Modulator")
-                        .version("1.1")
-                        .author("Sean Cross <sean@xobs.io>")
-                        .about("Takes compiled code and modulates it for a Love-to-Code sticker")
-                        .arg(Arg::with_name("input")
-                                .short("i")
-                                .long("input")
-                                .value_name("FILENAME")
-                                .help("Name of the input file")
-                                .takes_value(true)
-                                .required(true)
-                        )
-                        .arg(Arg::with_name("output")
-                                .short("o")
-                                .long("output")
-                                .value_name("FILENAME")
-                                .help("Name of the wave file to write to")
-                                .required(true)
-                        )
-                        .arg(Arg::with_name("version")
-                                .short("s")
-                                .long("stripe-version")
-                                .value_name("VERSION")
-                                .takes_value(true)
-                                .possible_values(&["1", "2"])
-                                .default_value("2")
-                                .help("Data striping version")
-                        )
-                        .arg(Arg::with_name("update")
-                                .short("u")
-                                .long("update")
-                                .takes_value(false)
-                                .help("Generate an OS update waveform")
-                        )
-                        .arg(Arg::with_name("rate")
-                                .short("r")
-                                .long("rate")
-                                .possible_values(&["high", "mid", "low"])
-                                .value_name("RATE")
-                                .takes_value(true)
-                                .default_value("high")
-                                .help("Audio encoding rate")
-                        )
-                        .get_matches();
+        .version("1.1")
+        .author("Sean Cross <sean@xobs.io>")
+        .about("Takes compiled code and modulates it for a Love-to-Code sticker")
+        .arg(Arg::with_name("input")
+            .short("i")
+            .long("input")
+            .value_name("FILENAME")
+            .help("Name of the input file")
+            .takes_value(true)
+            .required(true))
+        .arg(Arg::with_name("output")
+            .short("o")
+            .long("output")
+            .value_name("FILENAME")
+            .help("Name of the wave file to write to")
+            .required(true))
+        .arg(Arg::with_name("version")
+            .short("s")
+            .long("stripe-version")
+            .value_name("VERSION")
+            .takes_value(true)
+            .possible_values(&["1", "2"])
+            .default_value("2")
+            .help("Data striping version"))
+        .arg(Arg::with_name("update")
+            .short("u")
+            .long("update")
+            .takes_value(false)
+            .help("Generate an OS update waveform"))
+        .arg(Arg::with_name("rate")
+            .short("r")
+            .long("rate")
+            .possible_values(&["high", "mid", "low"])
+            .value_name("RATE")
+            .takes_value(true)
+            .default_value("high")
+            .help("Audio encoding rate"))
+        .get_matches();
 
     let source_filename = matches.value_of("input").unwrap();
     let target_filename = matches.value_of("output").unwrap();
@@ -129,9 +128,9 @@ fn main() {
 
     println!("Modulating {} into {}.", source_filename, target_filename);
     println!("Is update? {}  Data rate: {}  Stripe version: {:?}",
-            os_update,
-            data_rate,
-            stripe_version);
+             os_update,
+             data_rate,
+             stripe_version);
 
     if let Err(err) = do_modulation(source_filename,
                                     target_filename,
