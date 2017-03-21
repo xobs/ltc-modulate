@@ -14,7 +14,7 @@ fn do_modulation(source_filename: &str,
                  target_filename: &str,
                  data_rate: u32,
                  os_update: bool,
-                 stripe: controller::DataStripePattern)
+                 version: controller::ProtocolVersion)
                  -> std::io::Result<()> {
 
     let sample_rate = match data_rate {
@@ -23,7 +23,7 @@ fn do_modulation(source_filename: &str,
         2 => 44100.0 * 1.0,
         r => panic!("Unrecognized data rate: {}", r),
     };
-    let mut controller = controller::Controller::new(sample_rate, os_update, stripe);
+    let mut controller = controller::Controller::new(sample_rate, os_update, version);
 
     let input_data = match elf::File::open_path(source_filename) {
         Ok(e) => {
@@ -88,12 +88,12 @@ fn main() {
             .required(true))
         .arg(Arg::with_name("version")
             .short("s")
-            .long("stripe-version")
+            .long("protocol-version")
             .value_name("VERSION")
             .takes_value(true)
             .possible_values(&["1", "2"])
             .default_value("2")
-            .help("Data striping version"))
+            .help("Data protocol version"))
         .arg(Arg::with_name("update")
             .short("u")
             .long("update")
@@ -112,11 +112,11 @@ fn main() {
     let source_filename = matches.value_of("input").unwrap();
     let target_filename = matches.value_of("output").unwrap();
     let os_update = matches.is_present("update");
-    let stripe_version = match matches.value_of("version") {
-        Some("1") => controller::DataStripePattern::V1,
-        Some("2") => controller::DataStripePattern::V2,
+    let protocol_version = match matches.value_of("version") {
+        Some("1") => controller::ProtocolVersion::V1,
+        Some("2") => controller::ProtocolVersion::V2,
         Some(x) => panic!("Unrecognized version found: {}", x),
-        None => panic!("No data encoding version specified"),
+        None => panic!("No protocol version specified"),
     };
     let data_rate = match matches.value_of("rate") {
         Some("low") => 0,
@@ -127,16 +127,16 @@ fn main() {
     };
 
     println!("Modulating {} into {}.", source_filename, target_filename);
-    println!("Is update? {}  Data rate: {}  Stripe version: {:?}",
+    println!("Is update? {}  Data rate: {}  Protocol version: {:?}",
              os_update,
              data_rate,
-             stripe_version);
+             protocol_version);
 
     if let Err(err) = do_modulation(source_filename,
                                     target_filename,
                                     data_rate,
                                     os_update,
-                                    stripe_version) {
+                                    protocol_version) {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }
