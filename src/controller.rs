@@ -175,7 +175,6 @@ impl Controller {
         let footer = self.make_footer(&packet);
         self.append_data(&mut packet, &footer);
 
-        // let stop_bytes = vec![0xff, 0xff];
         self.append_data(&mut packet, &self.stop_bytes);
 
         // After the hash has been computed, stripe the data portion
