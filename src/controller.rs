@@ -33,13 +33,15 @@ pub struct Controller {
     os_update: bool,
     modulator: modulator::Modulator,
     protocol_version: ProtocolVersion,
+    preamble: Vec<u8>,
+    stop_bytes: Vec<u8>,
 }
 
 // Preamble sent before every audio packet
-// const preamble: [u8; 7] = [0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42];
+const PREAMBLE: [u8; 7] = [0x00, 0x00, 0x00, 0x00, 0xaa, 0x55, 0x42];
 
 // Stop bits, sent to pad the end of transmission
-// const stop_bytes_const: [u8; 1] = [0xff];
+const STOP_BYTES: [u8; 1] = [0xff];
 
 // Packet types
 const CONTROL_PACKET: u8 = 0x01;
@@ -54,72 +56,62 @@ impl Controller {
             os_update: os_update,
             protocol_version: protocol_version,
             modulator: modulator::Modulator::new(rate),
+            preamble: PREAMBLE.to_vec(),
+            stop_bytes: STOP_BYTES.to_vec(),
         }
     }
 
+    pub fn make_preamble(&self) -> Vec<u8> {
+        let mut header = vec![];
+        for byte in &self.preamble {
+            header.push(*byte);
+        }
+        header
+    }
+
     pub fn make_control_header(&self) -> Vec<u8> {
-        vec![0x00,
-             0x00,
-             0x00,
-             0x00,
-             0xaa,
-             0x55,
-             0x42,
-             self.protocol_version.as_num(),
-             CONTROL_PACKET,
-             0x00,
-             0x00]
+        let mut header = self.make_preamble();
+        header.push(self.protocol_version.as_num());
+        header.push(CONTROL_PACKET);
+        header.push(0x00);
+        header.push(0x00);
+        header
     }
 
     pub fn make_data_header(&self, block_number: u16) -> Vec<u8> {
-        vec![0x00,
-             0x00,
-             0x00,
-             0x00,
-             0xaa,
-             0x55,
-             0x42,
-             self.protocol_version.as_num(),
-             DATA_PACKET,
-             (block_number & 0xff) as u8,
-             ((block_number >> 8) & 0xff) as u8]
+        let mut header = self.make_preamble();
+        header.push(self.protocol_version.as_num());
+        header.push(DATA_PACKET);
+        header.push((block_number & 0xff) as u8);
+        header.push(((block_number >> 8) & 0xff) as u8);
+        header
     }
 
     pub fn make_control_os_header(&self) -> Vec<u8> {
-        vec![0x00,
-             0x00,
-             0x00,
-             0x00,
-             0xaa,
-             0x55,
-             0x42,
-             self.protocol_version.as_num(),
-             CONTROL_OS_PACKET,
-             0x00,
-             0x00]
+        let mut header = self.make_preamble();
+        header.push(self.protocol_version.as_num());
+        header.push(CONTROL_OS_PACKET);
+        header.push(0x00);
+        header.push(0x00);
+        header
     }
 
     pub fn make_data_os_header(&self, block_number: u16) -> Vec<u8> {
-        vec![0x00,
-             0x00,
-             0x00,
-             0x00,
-             0xaa,
-             0x55,
-             0x42,
-             self.protocol_version.as_num(),
-             DATA_OS_PACKET,
-             (block_number & 0xff) as u8,
-             ((block_number >> 8) & 0xff) as u8]
+        let mut header = self.make_preamble();
+        header.push(self.protocol_version.as_num());
+        header.push(DATA_OS_PACKET);
+        header.push((block_number & 0xff) as u8);
+        header.push(((block_number >> 8) & 0xff) as u8);
+        header
     }
 
-    pub fn append_data(&mut self, buffer: &mut Vec<u8>, data: Vec<u8>) {
+    pub fn append_data(&self, buffer: &mut Vec<u8>, data: &Vec<u8>) {
         for byte in data.iter() {
             buffer.push(*byte);
         }
     }
 
-    pub fn make_footer(&mut self, data: &Vec<u8>) -> Vec<u8> {
+    pub fn make_footer(&self, data: &Vec<u8>) -> Vec<u8> {
         let hash = 0xdeadbeefu32;
         let mut data_cursor = Cursor::new(data);
         data_cursor.set_position(7); // seek past the data header
@@ -138,29 +130,28 @@ impl Controller {
         } else {
             self.make_control_header()
         };
-        self.append_data(&mut packet, control_header);
+        self.append_data(&mut packet, &control_header);
 
         let mut program_length = vec![];
         program_length.write_u32::<LittleEndian>(data.len() as u32).unwrap();
-        self.append_data(&mut packet, program_length);
+        self.append_data(&mut packet, &program_length);
 
         let program_hash_32 = murmur3::murmur3_32(&mut Cursor::new(&data), 0x32d0babe);
         let mut program_hash = vec![];
         program_hash.write_u32::<LittleEndian>(program_hash_32).unwrap();
-        self.append_data(&mut packet, program_hash);
+        self.append_data(&mut packet, &program_hash);
 
         let mut program_guid_hasher = Md5::new();
         let mut program_guid_array = [0; 16];
         program_guid_hasher.input(data);
         program_guid_hasher.result(&mut program_guid_array);
         let program_guid = program_guid_array.to_vec();
-        self.append_data(&mut packet, program_guid);
+        self.append_data(&mut packet, &program_guid);
 
         let footer = self.make_footer(&packet);
-        self.append_data(&mut packet, footer);
+        self.append_data(&mut packet, &footer);
 
-        let stop_bytes = vec![0xff, 0xff];
-        self.append_data(&mut packet, stop_bytes);
+        self.append_data(&mut packet, &self.stop_bytes);
 
         packet
     }
@@ -174,18 +165,18 @@ impl Controller {
             self.make_data_header(block_num)
         };
         let data_header_len = data_header.len();
-        self.append_data(&mut packet, data_header);
+        self.append_data(&mut packet, &data_header);
 
         // Ensure the "data" payload is 256 bytes long.
         data.resize(256, 0xff);
         let data_len = data.len();
-        self.append_data(&mut packet, data);
+        self.append_data(&mut packet, &data);
 
         let footer = self.make_footer(&packet);
-        self.append_data(&mut packet, footer);
+        self.append_data(&mut packet, &footer);
 
-        let stop_bytes = vec![0xff, 0xff];
-        self.append_data(&mut packet, stop_bytes);
+        // let stop_bytes = vec![0xff, 0xff];
+        self.append_data(&mut packet, &self.stop_bytes);
 
         // After the hash has been computed, stripe the data portion
         // with a pattern of 0x55 and 0xaa.  This provides some level
