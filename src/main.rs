@@ -2,25 +2,42 @@ mod fsk;
 mod modulator;
 mod controller;
 mod wav;
+extern crate cpal;
 extern crate elf;
 
 extern crate clap;
-use clap::{Arg, App};
+use clap::{App, Arg};
 
 use std::io::prelude::*;
 use std::fs::File;
 
-fn do_modulation(source_filename: &str,
-                 target_filename: &str,
-                 data_rate: u32,
-                 os_update: bool,
-                 version: controller::ProtocolVersion)
-                 -> std::io::Result<()> {
+const DEFAULT_SAMPLE_RATE: f64 = 44100.0;
+
+fn do_modulation(
+    source_filename: &str,
+    target_filename: &str,
+    data_rate: u32,
+    os_update: bool,
+    version: controller::ProtocolVersion,
+    play_file: bool,
+) -> std::io::Result<()> {
+    let mut output_sample_rate = DEFAULT_SAMPLE_RATE;
+
+    if play_file {
+        let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
+        let format = endpoint
+            .supported_formats()
+            .unwrap()
+            .next()
+            .expect("Failed to get endpoint format")
+            .with_max_samples_rate();
+        output_sample_rate = format.samples_rate.0 as f64;
+    }
 
     let sample_rate = match data_rate {
-        0 => 44100.0 * 4.0,
-        1 => 44100.0 * 2.0,
-        2 => 44100.0 * 1.0,
+        0 => output_sample_rate * 4.0,
+        1 => output_sample_rate * 2.0,
+        2 => output_sample_rate * 1.0,
         r => panic!("Unrecognized data rate: {}", r),
     };
     let mut controller = controller::Controller::new(sample_rate, os_update, version);
@@ -42,9 +59,10 @@ fn do_modulation(source_filename: &str,
             for section in e.sections {
                 // It's unclear what exactly should be included,
                 // but this seems to produce the correct output.
-                if section.shdr.shtype == elf::types::SHT_PROGBITS &&
-                   section.shdr.flags != elf::types::SHF_NONE &&
-                   section.shdr.addr != 0 {
+                if section.shdr.shtype == elf::types::SHT_PROGBITS
+                    && section.shdr.flags != elf::types::SHF_NONE
+                    && section.shdr.addr != 0
+                {
                     data.extend(section.data);
                 }
             }
@@ -60,11 +78,75 @@ fn do_modulation(source_filename: &str,
     let mut audio_data: Vec<i16> = vec![];
 
     controller.encode(&input_data, &mut audio_data, data_rate);
-    let mut pilot_controller = controller::Controller::new(44100.0, os_update, version);
+    let mut pilot_controller = controller::Controller::new(output_sample_rate, os_update, version);
     pilot_controller.pilot(&mut audio_data, data_rate);
     controller.encode(&input_data, &mut audio_data, data_rate);
 
-    try!(wav::write_wav(44100, &audio_data, target_filename));
+    if play_file {
+        let mut audio_data_pos = 0;
+        let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
+        let format = endpoint
+            .supported_formats()
+            .unwrap()
+            .next()
+            .expect("Failed to get endpoint format")
+            .with_max_samples_rate();
+        println!("Format selected: {:?}", format);
+
+        let event_loop = cpal::EventLoop::new();
+        let voice_id = event_loop.build_voice(&endpoint, &format).unwrap();
+        event_loop.play(voice_id);
+
+        let samples_rate = format.samples_rate.0 as f32;
+        let mut sample_clock = 0f32;
+
+        // Produce a sinusoid of maximum amplitude.
+        let mut next_value = || {
+            if audio_data_pos > audio_data.len() {
+                panic!("Ran out of audio data");
+            }
+            let val = audio_data[audio_data_pos];
+            audio_data_pos = audio_data_pos + 1;
+            (val as f32) / 32767.0
+        };
+
+        event_loop.run(move |_, buffer| {
+            match buffer {
+                cpal::UnknownTypeBuffer::U16(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = ((next_value() * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+
+                cpal::UnknownTypeBuffer::I16(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = (next_value() * std::i16::MAX as f32) as i16;
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+
+                cpal::UnknownTypeBuffer::F32(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = next_value();
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+            };
+        });
+    } else {
+        try!(wav::write_wav(
+            output_sample_rate as u32,
+            &audio_data,
+            target_filename
+        ));
+    }
     Ok(())
 }
 
@@ -73,45 +155,61 @@ fn main() {
         .version("1.2")
         .author("Sean Cross <sean@xobs.io>")
         .about("Takes compiled code and modulates it for a Love-to-Code sticker")
-        .arg(Arg::with_name("input")
-            .short("i")
-            .long("input")
-            .value_name("FILENAME")
-            .help("Name of the input file")
-            .takes_value(true)
-            .required(true))
-        .arg(Arg::with_name("output")
-            .short("o")
-            .long("output")
-            .value_name("FILENAME")
-            .help("Name of the wave file to write to")
-            .required(true))
-        .arg(Arg::with_name("version")
-            .short("p")
-            .long("protocol-version")
-            .value_name("VERSION")
-            .takes_value(true)
-            .possible_values(&["1", "2"])
-            .default_value("2")
-            .help("Data protocol version"))
-        .arg(Arg::with_name("update")
-            .short("u")
-            .long("update")
-            .takes_value(false)
-            .help("Generate an OS update waveform"))
-        .arg(Arg::with_name("rate")
-            .short("r")
-            .long("rate")
-            .possible_values(&["high", "mid", "low"])
-            .value_name("RATE")
-            .takes_value(true)
-            .default_value("high")
-            .help("Audio encoding rate"))
+        .arg(
+            Arg::with_name("input")
+                .short("i")
+                .long("input")
+                .value_name("FILENAME")
+                .help("Name of the input file")
+                .takes_value(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("output")
+                .short("o")
+                .long("output")
+                .value_name("FILENAME")
+                .help("Name of the wave file to write to"),
+        )
+        .arg(
+            Arg::with_name("play")
+                .short("w")
+                .long("play")
+                .help("Play wave audio out the default sound device"),
+        )
+        .arg(
+            Arg::with_name("version")
+                .short("p")
+                .long("protocol-version")
+                .value_name("VERSION")
+                .takes_value(true)
+                .possible_values(&["1", "2"])
+                .default_value("2")
+                .help("Data protocol version"),
+        )
+        .arg(
+            Arg::with_name("update")
+                .short("u")
+                .long("update")
+                .takes_value(false)
+                .help("Generate an OS update waveform"),
+        )
+        .arg(
+            Arg::with_name("rate")
+                .short("r")
+                .long("rate")
+                .possible_values(&["high", "mid", "low"])
+                .value_name("RATE")
+                .takes_value(true)
+                .default_value("high")
+                .help("Audio encoding rate"),
+        )
         .get_matches();
 
     let source_filename = matches.value_of("input").unwrap();
-    let target_filename = matches.value_of("output").unwrap();
+    let target_filename = matches.value_of("output").unwrap_or("output.wav");
     let os_update = matches.is_present("update");
+    let play_file = matches.is_present("play");
     let protocol_version = match matches.value_of("version") {
         Some("1") => controller::ProtocolVersion::V1,
         Some("2") => controller::ProtocolVersion::V2,
@@ -127,16 +225,21 @@ fn main() {
     };
 
     println!("Modulating {} into {}.", source_filename, target_filename);
-    println!("Is update? {}  Data rate: {}  Protocol version: {:?}",
-             os_update,
-             data_rate,
-             protocol_version);
+    println!(
+        "Is update? {}  Data rate: {}  Protocol version: {:?}",
+        os_update,
+        data_rate,
+        protocol_version
+    );
 
-    if let Err(err) = do_modulation(source_filename,
-                                    target_filename,
-                                    data_rate,
-                                    os_update,
-                                    protocol_version) {
+    if let Err(err) = do_modulation(
+        source_filename,
+        target_filename,
+        data_rate,
+        os_update,
+        protocol_version,
+        play_file,
+    ) {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }
