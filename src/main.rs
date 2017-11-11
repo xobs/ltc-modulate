@@ -75,7 +75,7 @@ fn do_modulation(
             input_data
         }
     };
-    let mut audio_data: Vec<i16> = vec![];
+    let mut audio_data: Vec<f64> = vec![];
 
     controller.encode(&input_data, &mut audio_data, data_rate);
     let mut pilot_controller = controller::Controller::new(output_sample_rate, os_update, version);
@@ -97,9 +97,6 @@ fn do_modulation(
         let voice_id = event_loop.build_voice(&endpoint, &format).unwrap();
         event_loop.play(voice_id);
 
-        let samples_rate = format.samples_rate.0 as f32;
-        let mut sample_clock = 0f32;
-
         // Produce a sinusoid of maximum amplitude.
         let mut next_value = || {
             if audio_data_pos > audio_data.len() {
@@ -107,7 +104,7 @@ fn do_modulation(
             }
             let val = audio_data[audio_data_pos];
             audio_data_pos = audio_data_pos + 1;
-            (val as f32) / 32767.0
+            val as f32
         };
 
         event_loop.run(move |_, buffer| {
@@ -141,9 +138,15 @@ fn do_modulation(
             };
         });
     } else {
+        let mut output: Vec<i16> = Vec::new();
+        for sample in audio_data {
+            // Map -1 .. 1 to -32767 .. 32768
+            output.push((sample * 32767.0).round() as i16);
+        }
+
         try!(wav::write_wav(
             output_sample_rate as u32,
-            &audio_data,
+            &output,
             target_filename
         ));
     }

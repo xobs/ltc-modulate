@@ -12,16 +12,8 @@ impl Modulator {
     }
 
     // Modulate an array of 8-bit bytes into an array of signed 16-bit PCM samples
-    pub fn modulate_pcm(&mut self, input: &Vec<u8>) -> Vec<i16> {
+    pub fn modulate_pcm(&mut self, input: &Vec<u8>) -> Vec<f64> {
 
-        let modulated = self.encoder.modulate(input);
-        let mut output: Vec<i16> = Vec::new();
-
-        for sample in modulated {
-            // Map -1 .. 1 to -32767 .. 32768
-            output.push((sample * 32767.0).round() as i16);
-        }
-
-        output
+        self.encoder.modulate(input)
     }
 }

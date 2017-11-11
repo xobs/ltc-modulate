@@ -212,11 +212,11 @@ impl Controller {
         packet
     }
 
-    pub fn make_silence(&mut self, msecs: u32) -> Vec<i16> {
-        let mut buffer: Vec<i16> = vec![];
+    pub fn make_silence(&mut self, msecs: u32) -> Vec<f64> {
+        let mut buffer: Vec<f64> = vec![];
 
         let silence_length = (self.rate / (1000.0 / msecs as f64)).ceil() as usize;
-        buffer.resize(silence_length, 0);
+        buffer.resize(silence_length, 0f64);
         buffer
     }
 
@@ -228,7 +228,7 @@ impl Controller {
         buffer
     }
 
-    pub fn pilot(&mut self, output: &mut Vec<i16>, rate: u32) {
+    pub fn pilot(&mut self, output: &mut Vec<f64>, rate: u32) {
         if rate == 0 {
             // low rate preamble
             let data = self.make_zero(4000); // ~0.5secs
@@ -245,7 +245,7 @@ impl Controller {
         }
     }
 
-    pub fn encode(&mut self, input: &Vec<u8>, output: &mut Vec<i16>, rate: u32) {
+    pub fn encode(&mut self, input: &Vec<u8>, output: &mut Vec<f64>, rate: u32) {
         let mut silence_divisor = 1;
         if rate == 0 {
             silence_divisor = 4;
