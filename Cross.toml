@@ -16,3 +16,6 @@ image = "xobs/powerpc-unknown-linux-gnu"
 
 [target.x86_64-unknown-linux-gnu]
 image = "xobs/x86_64-unknown-linux-gnu"
+
+[target.x86_64-pc-windows-gnu]
+image = "xobs/x86_64-pc-windows-gnu"
