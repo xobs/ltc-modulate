@@ -10,8 +10,6 @@ use clap::{App, Arg};
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::{Arc, Mutex, Condvar};
-use std::thread;
 
 const DEFAULT_SAMPLE_RATE: f64 = 44100.0;
 
@@ -82,13 +80,12 @@ fn do_modulation(
 
     for _ in 0..repeats {
         controller.encode(&input_data, &mut audio_data, data_rate);
-        let mut pilot_controller = controller::Controller::new(output_sample_rate, os_update, version);
+        let mut pilot_controller =
+            controller::Controller::new(output_sample_rate, os_update, version);
         pilot_controller.pilot(&mut audio_data, data_rate);
     }
 
     if play_file {
-        let file_end_signal = Arc::new((Mutex::new(0), Condvar::new()));
-
         let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
         let format = endpoint
             .supported_formats()
@@ -102,71 +99,57 @@ fn do_modulation(
         let voice_id = event_loop.build_voice(&endpoint, &format).unwrap();
         event_loop.play(voice_id);
 
-        let thread_mutex = file_end_signal.clone();
         let audio_data_len = audio_data.len();
+        let mut audio_data_pos = 0;
+        let mut overrun_count = 0;
 
-        thread::spawn(move || {
-            // Produce a sinusoid of maximum amplitude.
-            let next_value = || {
-                let &(ref num, ref _cvar) = &*thread_mutex;
-                {
-                    let mut audio_data_pos = num.lock().unwrap();
-                    if *audio_data_pos >= audio_data.len() {
-                        0.0 as f32
-                    } else {
-                        let val = audio_data[*audio_data_pos];
-                        *audio_data_pos = *audio_data_pos + 1;
-                        //cvar.notify_one();
-                        val as f32
-                    }
-                }
-            };
-
-            event_loop.run(move |_, buffer| {
-                match buffer {
-                    cpal::UnknownTypeBuffer::U16(mut buffer) => {
-                        for sample in buffer.chunks_mut(format.channels.len()) {
-                            let value = ((next_value() * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
-                            for out in sample.iter_mut() {
-                                *out = value;
-                            }
-                        }
-                    }
-
-                    cpal::UnknownTypeBuffer::I16(mut buffer) => {
-                        for sample in buffer.chunks_mut(format.channels.len()) {
-                            let value = (next_value() * std::i16::MAX as f32) as i16;
-                            for out in sample.iter_mut() {
-                                *out = value;
-                            }
-                        }
-                    }
-
-                    cpal::UnknownTypeBuffer::F32(mut buffer) => {
-                        for sample in buffer.chunks_mut(format.channels.len()) {
-                            let value = next_value();
-                            for out in sample.iter_mut() {
-                                *out = value;
-                            }
-                        }
-                    }
-                };
-            });
-        });
-        println!("Thread is now playing");
-
-        loop {
-            {
-                let &(ref num, ref _cvar) = &*file_end_signal;
-                let offset = num.lock().unwrap();
-                if *offset >= audio_data_len {
+        // Produce a sinusoid of maximum amplitude.
+        let mut next_value = || {
+            if audio_data_pos >= audio_data_len {
+                overrun_count = overrun_count + 1;
+                // After 250ms of silence, exit the program.
+                if overrun_count > (sample_rate as u32 / 4) {
                     use std::process;
                     process::exit(0);
                 }
+                0.0 as f32
+            } else {
+                let val = audio_data[audio_data_pos];
+                audio_data_pos = audio_data_pos + 1;
+                val as f32
             }
-            use std::time::Duration;
-            thread::park_timeout(Duration::from_millis(250));
-        }
+        };
+
+        event_loop.run(move |_, buffer| {
+            match buffer {
+                cpal::UnknownTypeBuffer::U16(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = ((next_value() * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+
+                cpal::UnknownTypeBuffer::I16(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = (next_value() * std::i16::MAX as f32) as i16;
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+
+                cpal::UnknownTypeBuffer::F32(mut buffer) => {
+                    for sample in buffer.chunks_mut(format.channels.len()) {
+                        let value = next_value();
+                        for out in sample.iter_mut() {
+                            *out = value;
+                        }
+                    }
+                }
+            };
+        });
     } else {
         let mut output: Vec<i16> = Vec::new();
         for sample in audio_data {
@@ -228,7 +211,8 @@ fn main() {
                 .takes_value(true)
                 .default_value("3")
                 .help("Number of times to repeat"),
-        )        .arg(
+        )
+        .arg(
             Arg::with_name("update")
                 .short("u")
                 .long("update")
