@@ -25,7 +25,7 @@ main() {
     ls target || true
     ls target/$TARGET || true
     ls target/$TARGET/release || true
-    cp target/$TARGET/release/ltc-modulate $stage/$TRAVIS_TAG/
+    cp target/$TARGET/release/ltc-modulate $stage/$TRAVIS_TAG/ || cp target/$TARGET/release/ltc-modulate.exe $stage/$TRAVIS_TAG/
 
     cd $stage
     tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz *
