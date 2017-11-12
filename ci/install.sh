@@ -5,6 +5,7 @@ main() {
     if [ $TRAVIS_OS_NAME = linux ]; then
         target=x86_64-unknown-linux-musl
         sort=sort
+        apt-get install -y libasound2-dev
     else
         target=x86_64-apple-darwin
         sort=gsort  # for `sort --sort-version`, from brew's coreutils.
@@ -28,7 +29,7 @@ main() {
         x86_64-apple-ios)
             rustup target install x86_64-apple-ios
             ;;
-    esac
+        esac
 
     # This fetches latest stable release
     local tag=$(git ls-remote --tags --refs --exit-code https://github.com/japaric/cross \
