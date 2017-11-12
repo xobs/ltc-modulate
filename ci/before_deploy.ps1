@@ -7,11 +7,12 @@ $STAGE = [System.Guid]::NewGuid().ToString()
 Set-Location $ENV:Temp
 New-Item -Type Directory -Name $STAGE
 Set-Location $STAGE
+New-Item -Type Directory -Name $($Env:APPVEYOR_REPO_TAG_NAME)
 
 $ZIP = "$SRC_DIR\$($Env:CRATE_NAME)-$($Env:APPVEYOR_REPO_TAG_NAME)-$($Env:TARGET).zip"
 
 # TODO Update this to package the right artifacts
-Copy-Item "$SRC_DIR\target\$($Env:TARGET)\release\ltc-modulate.exe" '.\'
+Copy-Item "$SRC_DIR\target\$($Env:TARGET)\release\ltc-modulate.exe" "$($Env:APPVEYOR_REPO_TAG_NAME)"
 
 7z a "$ZIP" *
 

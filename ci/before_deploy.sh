@@ -21,7 +21,8 @@ main() {
     cross rustc --bin ltc-modulate --target $TARGET --release -- -C lto
 
     # TODO Update this to package the right artifacts
-    cp target/$TARGET/release/ltc-modulate $stage/
+    mkdir $stage/$TRAVIS_TAG
+    cp target/$TARGET/release/ltc-modulate $stage/$TRAVIS_TAG/
 
     cd $stage
     tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz *
