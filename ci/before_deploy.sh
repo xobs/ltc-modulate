@@ -22,9 +22,6 @@ main() {
 
     # TODO Update this to package the right artifacts
     mkdir $stage/$TRAVIS_TAG
-    ls target || true
-    ls target/$TARGET || true
-    ls target/$TARGET/release || true
     cp target/$TARGET/release/ltc-modulate $stage/$TRAVIS_TAG/ || cp target/$TARGET/release/ltc-modulate.exe $stage/$TRAVIS_TAG/
 
     cd $stage
