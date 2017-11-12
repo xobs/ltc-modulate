@@ -4,9 +4,6 @@ set -ex
 
 # TODO This is the "test phase", tweak it as you see fit
 main() {
-    if [ $TRAVIS_OS_NAME = linux ]; then
-        apt-get install -y libasound2-dev
-    fi
     cross build --target $TARGET
     cross build --target $TARGET --release
 
