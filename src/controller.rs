@@ -20,10 +20,10 @@ pub enum ProtocolVersion {
 }
 
 impl ProtocolVersion {
-    pub fn as_num(&self) -> u8 {
+    pub fn as_num(self) -> u8 {
         match self {
-            &ProtocolVersion::V1 => 1,
-            &ProtocolVersion::V2 => 2,
+            ProtocolVersion::V1 => 1,
+            ProtocolVersion::V2 => 2,
         }
     }
 }
@@ -52,9 +52,9 @@ const DATA_OS_PACKET: u8 = 0x04;
 impl Controller {
     pub fn new(rate: f64, os_update: bool, protocol_version: ProtocolVersion) -> Controller {
         Controller {
-            rate: rate,
-            os_update: os_update,
-            protocol_version: protocol_version,
+            rate,
+            os_update,
+            protocol_version,
             modulator: modulator::Modulator::new(rate),
             preamble: PREAMBLE.to_vec(),
             stop_bytes: STOP_BYTES.to_vec(),
@@ -105,14 +105,14 @@ impl Controller {
         header
     }
 
-    pub fn append_data(&self, buffer: &mut Vec<u8>, data: &Vec<u8>) {
+    pub fn append_data(&self, buffer: &mut Vec<u8>, data: &[u8]) {
         for byte in data.iter() {
             buffer.push(*byte);
         }
     }
 
-    pub fn make_footer(&self, data: &Vec<u8>) -> Vec<u8> {
-        let hash = 0xdeadbeefu32;
+    pub fn make_footer(&self, data: &[u8]) -> Vec<u8> {
+        let hash = 0xdead_beefu32;
         let mut data_cursor = Cursor::new(data);
         data_cursor.set_position(7); // seek past the data header
         let data_hash_32 = murmur3::murmur3_32(&mut data_cursor, hash);
@@ -121,7 +121,7 @@ impl Controller {
         data_hash
     }
 
-    pub fn make_control_packet(&mut self, data: &Vec<u8>) -> Vec<u8> {
+    pub fn make_control_packet(&mut self, data: &[u8]) -> Vec<u8> {
 
         let mut packet = vec![];
 
@@ -136,7 +136,7 @@ impl Controller {
         program_length.write_u32::<LittleEndian>(data.len() as u32).unwrap();
         self.append_data(&mut packet, &program_length);
 
-        let program_hash_32 = murmur3::murmur3_32(&mut Cursor::new(&data), 0x32d0babe);
+        let program_hash_32 = murmur3::murmur3_32(&mut Cursor::new(&data), 0x32d0_babe);
         let mut program_hash = vec![];
         program_hash.write_u32::<LittleEndian>(program_hash_32).unwrap();
         self.append_data(&mut packet, &program_hash);
@@ -156,9 +156,9 @@ impl Controller {
         packet
     }
 
-    pub fn make_data_packet(&mut self, data_in: &Vec<u8>, block_num: u16) -> Vec<u8> {
+    pub fn make_data_packet(&mut self, data_in: &[u8], block_num: u16) -> Vec<u8> {
         let mut packet = vec![];
-        let mut data = data_in.clone();
+        let mut data = data_in.to_owned();
         let data_header = if self.os_update {
             self.make_data_os_header(block_num)
         } else {
@@ -186,9 +186,9 @@ impl Controller {
             ProtocolVersion::V1 => {
                 for i in 0..data_len {
                     if (i % 16) == 3 {
-                        packet[i + data_header_len] = packet[i + data_header_len] ^ 0x55;
+                        packet[i + data_header_len] ^= 0x55;
                     } else if (i % 16) == 11 {
-                        packet[i + data_header_len] = packet[i + data_header_len] ^ 0xaa;
+                        packet[i + data_header_len] ^= 0xaa;
                     }
                 }
             },
@@ -200,11 +200,11 @@ impl Controller {
                 // also skip capping hash and stop bytes
                 for i in (self.preamble.len() + 2)..(packet.len() - (4 + self.stop_bytes.len())) {
                     if ((i-9+2) % 3) == 0 {
-                        packet[i] = packet[i] ^ 0x35;
+                        packet[i] ^= 0x35;
                     } else if ((i-9+2) % 3) == 1 {
-                        packet[i] = packet[i] ^ 0xac;
+                        packet[i] ^= 0xac;
                     } else if ((i-9+2) % 3) == 2 {
-                        packet[i] = packet[i] ^ 0x95;
+                        packet[i] ^= 0x95;
                     }
                 },
         }
@@ -245,7 +245,7 @@ impl Controller {
         }
     }
 
-    pub fn encode(&mut self, input: &Vec<u8>, output: &mut Vec<f64>, rate: u32) {
+    pub fn encode(&mut self, input: &[u8], output: &mut Vec<f64>, rate: u32) {
         let mut silence_divisor = 1;
         if rate == 0 {
             silence_divisor = 4;
@@ -276,7 +276,7 @@ impl Controller {
         output.append(&mut audio);
 
         for mut packet_num in 0..blocks {
-            packet_num = packet_num & 0xff;
+            packet_num &= 0xff;
             let slice_start = packet_num * 256;
             let mut packet_data: Vec<u8> = vec![];
             for i in 0..256 {

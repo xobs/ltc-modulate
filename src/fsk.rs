@@ -21,8 +21,8 @@ impl FskEncoder {
 
     pub fn new(f_lo: f64, f_hi: f64, baud_rate: f64, sample_rate: f64) -> FskEncoder {
         FskEncoder {
-            sample_rate: sample_rate,
-            baud_rate: baud_rate,
+            sample_rate,
+            baud_rate,
 
             phase: 0.0,
             omega_lo: (2.0 * std::f64::consts::PI * f_lo) / sample_rate,
@@ -38,7 +38,7 @@ impl FskEncoder {
     }
 
     // does what you think it does -- input data should be uint8 array, outputdata is floats
-    pub fn modulate(&mut self, input: &Vec<u8>) -> Vec<f64> {
+    pub fn modulate(&mut self, input: &[u8]) -> Vec<f64> {
         let mut output: Vec<f64> = Vec::new();
         self.data_pos = 0;
 

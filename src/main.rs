@@ -1,6 +1,6 @@
+mod controller;
 mod fsk;
 mod modulator;
-mod controller;
 mod wav;
 extern crate cpal;
 extern crate elf;
@@ -11,6 +11,7 @@ use clap::{App, Arg};
 use std::fs::File;
 use std::io::prelude::*;
 
+// const DEFAULT_SAMPLE_RATE: f64 = 48000.0;
 const DEFAULT_SAMPLE_RATE: f64 = 44100.0;
 
 fn do_modulation(
@@ -22,9 +23,7 @@ fn do_modulation(
     play_file: bool,
     repeats: u32,
 ) -> std::io::Result<()> {
-    let mut output_sample_rate = DEFAULT_SAMPLE_RATE;
-
-    if play_file {
+    let output_sample_rate = if play_file {
         let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
         let format = endpoint
             .supported_formats()
@@ -32,8 +31,10 @@ fn do_modulation(
             .next()
             .expect("Failed to get endpoint format")
             .with_max_samples_rate();
-        output_sample_rate = format.samples_rate.0 as f64;
-    }
+        format.samples_rate.0 as f64
+    } else {
+        DEFAULT_SAMPLE_RATE
+    };
 
     let sample_rate = match data_rate {
         0 => output_sample_rate * 4.0,
@@ -70,9 +71,9 @@ fn do_modulation(
             data
         }
         Err(_) => {
-            let mut input = try!(File::open(source_filename));
+            let mut input = File::open(source_filename)?;
             let mut input_data: Vec<u8> = vec![];
-            try!(input.read_to_end(&mut input_data));
+            input.read_to_end(&mut input_data)?;
             input_data
         }
     };
@@ -106,7 +107,7 @@ fn do_modulation(
         // Produce a sinusoid of maximum amplitude.
         let mut next_value = || {
             if audio_data_pos >= audio_data_len {
-                overrun_count = overrun_count + 1;
+                overrun_count += 1;
                 // After 250ms of silence, exit the program.
                 if overrun_count > (sample_rate as u32 / 4) {
                     use std::process;
@@ -115,7 +116,7 @@ fn do_modulation(
                 0.0 as f32
             } else {
                 let val = audio_data[audio_data_pos];
-                audio_data_pos = audio_data_pos + 1;
+                audio_data_pos += 1;
                 val as f32
             }
         };
@@ -157,11 +158,7 @@ fn do_modulation(
             output.push((sample * 32767.0).round() as i16);
         }
 
-        try!(wav::write_wav(
-            output_sample_rate as u32,
-            &output,
-            target_filename
-        ));
+        wav::write_wav(output_sample_rate as u32, &output, target_filename)?;
     }
     Ok(())
 }
@@ -253,9 +250,7 @@ fn main() {
     println!("Modulating {} into {}.", source_filename, target_filename);
     println!(
         "Is update? {}  Data rate: {}  Protocol version: {:?}",
-        os_update,
-        data_rate,
-        protocol_version
+        os_update, data_rate, protocol_version
     );
 
     if let Err(err) = do_modulation(
