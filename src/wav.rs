@@ -10,21 +10,32 @@ pub fn write_wav(rate: u32, samples: &[i16], filename: &str) -> std::io::Result<
     let mut file = File::create(filename)?;
     let bits_per_sample = 16;
     let num_channels = 1;
-    /* chunkId */       file.write_all(&[0x52, 0x49, 0x46, 0x46])?;          // 'RIFF'
+    /* chunkId */       file.write_all(&[0x52, 0x49, 0x46, 0x46])?;        // 'RIFF'
     /* chunkSize */     file.write_u32::<LittleEndian>(36 + (samples.len() as u32 * (bits_per_sample / 8)))?;
-    /* format */        file.write_all(&[0x57, 0x41, 0x56, 0x45])?;          // 'WAVE'
-    /* subChunk1Id */   file.write_all(&[0x66, 0x6d, 0x74, 0x20])?;          // 'fmt '
-    /* subChunk1Size */ file.write_u32::<LittleEndian>(16 as u32)?;      // 16 bytes for PCM
-    /* audioFormat */   file.write_u16::<LittleEndian>(FORMAT_PCM)?;       // 1 = PCM
-    /* numChannels */   file.write_u16::<LittleEndian>(num_channels as u16)?;  // 1 = Mono
-    /* sampleRate */    file.write_u32::<LittleEndian>(rate)?;           // Probably 44100
+    /* format */        file.write_all(&[0x57, 0x41, 0x56, 0x45])?;        // 'WAVE'
+    /* subChunk1Id */   file.write_all(&[0x66, 0x6d, 0x74, 0x20])?;        // 'fmt '
+    /* subChunk1Size */ file.write_u32::<LittleEndian>(16 as u32)?;             // 16 bytes for PCM
+    /* audioFormat */   file.write_u16::<LittleEndian>(FORMAT_PCM)?;            // 1 = PCM
+    /* numChannels */   file.write_u16::<LittleEndian>(num_channels as u16)?;   // 1 = Mono
+    /* sampleRate */    file.write_u32::<LittleEndian>(rate)?;                  // Probably 44100
     /* byteRate */      file.write_u32::<LittleEndian>(rate * num_channels * (bits_per_sample / 8) as u32)?;
     /* blockAlign */    file.write_u16::<LittleEndian>(num_channels as u16 * (bits_per_sample / 8) as u16)?;
     /* bitsPerSample */ file.write_u16::<LittleEndian>(bits_per_sample as u16)?;
-    /* subChunk2Id */   file.write_all(&[0x64, 0x61, 0x74, 0x61])?;          // 'data'
+    /* subChunk2Id */   file.write_all(&[0x64, 0x61, 0x74, 0x61])?;        // 'data'
     /* subChunk2Size */ file.write_u32::<LittleEndian>(samples.len() as u32 * (bits_per_sample / 8))?;
-    for sample in samples {
-        file.write_i16::<LittleEndian>(*sample)?;
+    if cfg!(target_endian = "big") {
+        for sample in samples {
+            file.write_i16::<LittleEndian>(*sample)?;
+        }
+    } else {
+        use std::{slice, mem};
+        let slice_u8: &[u8] = unsafe {
+            slice::from_raw_parts(
+                samples.as_ptr() as *const u8,
+                samples.len() * mem::size_of::<u16>()
+            )
+        };
+        file.write_all(slice_u8)?;
     }
 
     Ok(())
