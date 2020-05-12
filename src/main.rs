@@ -23,20 +23,20 @@ pub enum EncodingRate {
 
 impl EncodingRate {
     pub fn silence_divisor(&self) -> u32 {
-        match self {
-            &EncodingRate::Low => 4,
-            &EncodingRate::Mid => 2,
-            &EncodingRate::High => 1,
+        match *self {
+            EncodingRate::Low => 4,
+            EncodingRate::Mid => 2,
+            EncodingRate::High => 1,
         }
     }
 }
 
 impl core::fmt::Display for EncodingRate {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            &EncodingRate::Low => write!(f, "Low"),
-            &EncodingRate::Mid => write!(f, "Mid"),
-            &EncodingRate::High => write!(f, "High"),
+        match *self {
+            EncodingRate::Low => write!(f, "Low"),
+            EncodingRate::Mid => write!(f, "Mid"),
+            EncodingRate::High => write!(f, "High"),
         }
     }
 }
