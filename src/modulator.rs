@@ -5,8 +5,8 @@ pub struct Modulator {
 }
 
 impl Modulator {
-    pub fn new(rate: f64) -> Modulator {
-        Modulator { encoder: fsk::FskEncoder::new(8666.0, 12500.0, 8000.0, rate) }
+    pub fn new(sample_rate: f64, baud_rate: f64, f_lo: f64, f_hi: f64) -> Modulator {
+        Modulator { encoder: fsk::FskEncoder::new(f_lo, f_hi, baud_rate, sample_rate) }
     }
 
     // Modulate an array of 8-bit bytes into an array of signed 16-bit PCM samples

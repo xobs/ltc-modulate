@@ -31,6 +31,11 @@ impl EncodingRate {
     }
 }
 
+enum ModulationError {
+    Io(std::io::Error),
+    FloatParse(std::num::ParseFloatError),
+}
+
 impl core::fmt::Display for EncodingRate {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
@@ -41,12 +46,36 @@ impl core::fmt::Display for EncodingRate {
     }
 }
 
+impl std::convert::From<std::io::Error> for ModulationError {
+    fn from(error: std::io::Error) -> Self {
+        ModulationError::Io(error)
+    }
+}
+
+impl std::convert::From<std::num::ParseFloatError> for ModulationError {
+    fn from(error: std::num::ParseFloatError) -> Self {
+        ModulationError::FloatParse(error)
+    }
+}
+
+impl core::fmt::Debug for ModulationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match &self {
+            ModulationError::Io(e) => write!(f, "Io Error {:?}", e),
+            ModulationError::FloatParse(e) => write!(f, "Unable to parse float: {:?}", e),
+        }
+    }
+}
+
 struct ModulationConfig {
     data_rate: EncodingRate,
     os_update: bool,
     version: controller::ProtocolVersion,
     repeat_count: u32,
     sample_rate: f64,
+    baud_rate: f64,
+    f_lo: f64,
+    f_hi: f64,
 }
 
 fn do_modulation(
@@ -54,13 +83,20 @@ fn do_modulation(
     target_filename: &str,
     play_file: bool,
     cfg: ModulationConfig,
-) -> std::io::Result<()> {
+) -> Result<(), std::io::Error> {
     let sample_rate = match cfg.data_rate {
         EncodingRate::Low => cfg.sample_rate * 4.0,
         EncodingRate::Mid => cfg.sample_rate * 2.0,
         EncodingRate::High => cfg.sample_rate * 1.0,
     };
-    let mut controller = controller::Controller::new(sample_rate, cfg.os_update, cfg.version);
+    let mut controller = controller::Controller::new(
+        sample_rate,
+        cfg.os_update,
+        cfg.version,
+        cfg.baud_rate,
+        cfg.f_lo,
+        cfg.f_hi,
+    );
 
     let input_data = match elf::File::open_path(source_filename) {
         Ok(e) => {
@@ -99,8 +135,14 @@ fn do_modulation(
 
     for _ in 0..cfg.repeat_count {
         controller.encode(&input_data, &mut audio_data, &cfg.data_rate);
-        let mut pilot_controller =
-            controller::Controller::new(cfg.sample_rate, cfg.os_update, cfg.version);
+        let mut pilot_controller = controller::Controller::new(
+            cfg.sample_rate,
+            cfg.os_update,
+            cfg.version,
+            cfg.baud_rate,
+            cfg.f_lo,
+            cfg.f_hi,
+        );
         pilot_controller.pilot(&mut audio_data, &cfg.data_rate);
     }
 
@@ -181,7 +223,7 @@ fn do_modulation(
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), ModulationError> {
     let matches = App::new("Love-to-Code Program Modulator")
         .version("1.3")
         .author("Sean Cross <sean@xobs.io>")
@@ -251,6 +293,35 @@ fn main() {
                 .default_value("high")
                 .help("Audio encoding rate"),
         )
+        .arg(
+            Arg::with_name("baud-rate")
+                .short("b")
+                .long("baud")
+                .value_name("BAUD_RATE")
+                .takes_value(true)
+                .default_value("8000")
+                .help("Baud rate for transmission"),
+        )
+        .arg(
+            Arg::with_name("f-lo")
+                .short("l")
+                .long("f-lo")
+                .aliases(&["flo", "f_lo", "f_low", "f-low", "flow", "f_space"])
+                .value_name("F_LO")
+                .takes_value(true)
+                .default_value("8666")
+                .help("Lower frequency used for F_LO / F_SPACE"),
+        )
+        .arg(
+            Arg::with_name("f-hi")
+                .short("h")
+                .long("f-hi")
+                .aliases(&["fhi", "f_hi", "f_high", "f-high", "f_mark"])
+                .value_name("F_HI")
+                .takes_value(true)
+                .default_value("12500")
+                .help("Lower frequency used for F_HI / F_MARK"),
+        )
         .get_matches();
 
     let source_filename = matches.value_of("input").unwrap();
@@ -273,6 +344,18 @@ fn main() {
             .map(|s| s.parse::<f64>().unwrap())
             .unwrap_or(DEFAULT_SAMPLE_RATE)
     };
+    let baud_rate = matches
+        .value_of("baud-rate")
+        .map(|s| s.parse::<f64>())
+        .unwrap()?;
+    let f_lo = matches
+        .value_of("f-lo")
+        .map(|s| s.parse::<f64>())
+        .unwrap()?;
+    let f_hi = matches
+        .value_of("f-hi")
+        .map(|s| s.parse::<f64>())
+        .unwrap()?;
     let protocol_version = match matches.value_of("version") {
         Some("1") => controller::ProtocolVersion::V1,
         Some("2") => controller::ProtocolVersion::V2,
@@ -296,6 +379,9 @@ fn main() {
     let cfg = ModulationConfig {
         data_rate,
         os_update,
+        baud_rate,
+        f_lo,
+        f_hi,
         version: protocol_version,
         repeat_count: repeats,
         sample_rate: output_sample_rate,
@@ -305,4 +391,6 @@ fn main() {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }
+
+    Ok(())
 }

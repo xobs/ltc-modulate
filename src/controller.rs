@@ -52,12 +52,12 @@ const CONTROL_OS_PACKET: u8 = 0x03;
 const DATA_OS_PACKET: u8 = 0x04;
 
 impl Controller {
-    pub fn new(rate: f64, os_update: bool, protocol_version: ProtocolVersion) -> Controller {
+    pub fn new(sample_rate: f64, os_update: bool, protocol_version: ProtocolVersion, baud_rate: f64, f_lo: f64, f_hi: f64,) -> Controller {
         Controller {
-            rate,
+            rate: sample_rate,
             os_update,
             protocol_version,
-            modulator: modulator::Modulator::new(rate),
+            modulator: modulator::Modulator::new(sample_rate, baud_rate, f_lo, f_hi),
             preamble: PREAMBLE.to_vec(),
             stop_bytes: STOP_BYTES.to_vec(),
         }
