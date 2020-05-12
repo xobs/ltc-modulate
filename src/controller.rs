@@ -6,6 +6,8 @@ extern crate murmur3;
 use self::crypto::digest::Digest;
 use self::crypto::md5::Md5;
 
+use ::EncodingRate;
+
 use self::byteorder::{LittleEndian, WriteBytesExt};
 use std::io::Cursor;
 
@@ -233,14 +235,12 @@ impl Controller {
         buffer
     }
 
-    pub fn pilot(&mut self, output: &mut Vec<f64>, rate: u32) {
-        if rate == 0 {
-            // low rate preamble
+    pub fn pilot(&mut self, output: &mut Vec<f64>, rate: &EncodingRate) {
+        if *rate == EncodingRate::Low {
             let data = self.make_zero(4000); // ~0.5secs
             let mut audio = self.modulator.modulate_pcm(&data);
             output.append(&mut audio);
         } else {
-            // high rate preamble
             // // no preamble at high rate, this is the default
             // let data = self.make_one(3000); // ~0.5secs
             // let mut audio = self.modulator.modulate_pcm(&data);
@@ -249,13 +249,8 @@ impl Controller {
         }
     }
 
-    pub fn encode(&mut self, input: &[u8], output: &mut Vec<f64>, rate: u32) {
-        let mut silence_divisor = 1;
-        if rate == 0 {
-            silence_divisor = 4;
-        } else if rate == 1 {
-            silence_divisor = 2;
-        }
+    pub fn encode(&mut self, input: &[u8], output: &mut Vec<f64>, rate: &EncodingRate) {
+        let silence_divisor = rate.silence_divisor();
         let file_length = input.len();
 
         // Note: Maximum of 65536 blocks

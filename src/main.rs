@@ -14,35 +14,53 @@ use std::io::prelude::*;
 // const DEFAULT_SAMPLE_RATE: f64 = 48000.0;
 const DEFAULT_SAMPLE_RATE: f64 = 44100.0;
 
+#[derive(PartialEq)]
+pub enum EncodingRate {
+    Low,
+    Mid,
+    High,
+}
+
+impl EncodingRate {
+    pub fn silence_divisor(&self) -> u32 {
+        match self {
+            &EncodingRate::Low => 4,
+            &EncodingRate::Mid => 2,
+            &EncodingRate::High => 1,
+        }
+    }
+}
+
+impl core::fmt::Display for EncodingRate {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            &EncodingRate::Low => write!(f, "Low"),
+            &EncodingRate::Mid => write!(f, "Mid"),
+            &EncodingRate::High => write!(f, "High"),
+        }
+    }
+}
+
+struct ModulationConfig {
+    data_rate: EncodingRate,
+    os_update: bool,
+    version: controller::ProtocolVersion,
+    repeat_count: u32,
+    sample_rate: f64,
+}
+
 fn do_modulation(
     source_filename: &str,
     target_filename: &str,
-    data_rate: u32,
-    os_update: bool,
-    version: controller::ProtocolVersion,
     play_file: bool,
-    repeats: u32,
+    cfg: ModulationConfig,
 ) -> std::io::Result<()> {
-    let output_sample_rate = if play_file {
-        let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
-        let format = endpoint
-            .supported_formats()
-            .unwrap()
-            .next()
-            .expect("Failed to get endpoint format")
-            .with_max_samples_rate();
-        format.samples_rate.0 as f64
-    } else {
-        DEFAULT_SAMPLE_RATE
+    let sample_rate = match cfg.data_rate {
+        EncodingRate::Low => cfg.sample_rate * 4.0,
+        EncodingRate::Mid => cfg.sample_rate * 2.0,
+        EncodingRate::High => cfg.sample_rate * 1.0,
     };
-
-    let sample_rate = match data_rate {
-        0 => output_sample_rate * 4.0,
-        1 => output_sample_rate * 2.0,
-        2 => output_sample_rate * 1.0,
-        r => panic!("Unrecognized data rate: {}", r),
-    };
-    let mut controller = controller::Controller::new(sample_rate, os_update, version);
+    let mut controller = controller::Controller::new(sample_rate, cfg.os_update, cfg.version);
 
     let input_data = match elf::File::open_path(source_filename) {
         Ok(e) => {
@@ -79,11 +97,11 @@ fn do_modulation(
     };
     let mut audio_data: Vec<f64> = vec![];
 
-    for _ in 0..repeats {
-        controller.encode(&input_data, &mut audio_data, data_rate);
+    for _ in 0..cfg.repeat_count {
+        controller.encode(&input_data, &mut audio_data, &cfg.data_rate);
         let mut pilot_controller =
-            controller::Controller::new(output_sample_rate, os_update, version);
-        pilot_controller.pilot(&mut audio_data, data_rate);
+            controller::Controller::new(cfg.sample_rate, cfg.os_update, cfg.version);
+        pilot_controller.pilot(&mut audio_data, &cfg.data_rate);
     }
 
     if play_file {
@@ -158,7 +176,7 @@ fn do_modulation(
             output.push((sample * 32767.0).round() as i16);
         }
 
-        wav::write_wav(output_sample_rate as u32, &output, target_filename)?;
+        wav::write_wav(cfg.sample_rate as u32, &output, target_filename)?;
     }
     Ok(())
 }
@@ -183,6 +201,13 @@ fn main() {
                 .long("output")
                 .value_name("FILENAME")
                 .help("Name of the wave file to write to"),
+        )
+        .arg(
+            Arg::with_name("sample-rate")
+                .short("r")
+                .long("rate")
+                .value_name("SAMPLE_RATE")
+                .help("Sample rate of the output file"),
         )
         .arg(
             Arg::with_name("play")
@@ -217,9 +242,9 @@ fn main() {
                 .help("Generate an OS update waveform"),
         )
         .arg(
-            Arg::with_name("rate")
-                .short("r")
-                .long("rate")
+            Arg::with_name("encoding-rate")
+                .short("e")
+                .long("encoding-rate")
                 .possible_values(&["high", "mid", "low"])
                 .value_name("RATE")
                 .takes_value(true)
@@ -233,16 +258,31 @@ fn main() {
     let os_update = matches.is_present("update");
     let play_file = matches.is_present("play");
     let repeats = matches.value_of("repeats").unwrap().parse::<u32>().unwrap();
+    let output_sample_rate = if play_file {
+        let endpoint = cpal::default_endpoint().expect("Failed to get default endpoint");
+        let format = endpoint
+            .supported_formats()
+            .unwrap()
+            .next()
+            .expect("Failed to get endpoint format")
+            .with_max_samples_rate();
+        format.samples_rate.0 as f64
+    } else {
+        matches
+            .value_of("sample-rate")
+            .map(|s| s.parse::<f64>().unwrap())
+            .unwrap_or(DEFAULT_SAMPLE_RATE)
+    };
     let protocol_version = match matches.value_of("version") {
         Some("1") => controller::ProtocolVersion::V1,
         Some("2") => controller::ProtocolVersion::V2,
         Some(x) => panic!("Unrecognized version found: {}", x),
         None => panic!("No protocol version specified"),
     };
-    let data_rate = match matches.value_of("rate") {
-        Some("low") => 0,
-        Some("mid") => 1,
-        Some("high") => 2,
+    let data_rate = match matches.value_of("encoding-rate") {
+        Some("low") => EncodingRate::Low,
+        Some("mid") => EncodingRate::Mid,
+        Some("high") => EncodingRate::High,
         Some(x) => panic!("Unrecognized rate found: {}", x),
         None => panic!("No valid rate specified"),
     };
@@ -253,15 +293,15 @@ fn main() {
         os_update, data_rate, protocol_version
     );
 
-    if let Err(err) = do_modulation(
-        source_filename,
-        target_filename,
+    let cfg = ModulationConfig {
         data_rate,
         os_update,
-        protocol_version,
-        play_file,
-        repeats,
-    ) {
+        version: protocol_version,
+        repeat_count: repeats,
+        sample_rate: output_sample_rate,
+    };
+
+    if let Err(err) = do_modulation(source_filename, target_filename, play_file, cfg) {
         println!("Unable to modulate: {}", &err);
         std::process::exit(1);
     }
