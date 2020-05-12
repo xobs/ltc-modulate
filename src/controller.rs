@@ -1,13 +1,13 @@
 use modulator;
 extern crate byteorder;
-extern crate murmur3;
 extern crate crypto;
+extern crate murmur3;
 
-use self::crypto::md5::Md5;
 use self::crypto::digest::Digest;
+use self::crypto::md5::Md5;
 
-use std::io::Cursor;
 use self::byteorder::{LittleEndian, WriteBytesExt};
+use std::io::Cursor;
 
 /// Which version of the data strip pattern is used
 #[derive(Clone, Copy, Debug)]
@@ -122,7 +122,6 @@ impl Controller {
     }
 
     pub fn make_control_packet(&mut self, data: &[u8]) -> Vec<u8> {
-
         let mut packet = vec![];
 
         let control_header = if self.os_update {
@@ -133,12 +132,16 @@ impl Controller {
         self.append_data(&mut packet, &control_header);
 
         let mut program_length = vec![];
-        program_length.write_u32::<LittleEndian>(data.len() as u32).unwrap();
+        program_length
+            .write_u32::<LittleEndian>(data.len() as u32)
+            .unwrap();
         self.append_data(&mut packet, &program_length);
 
         let program_hash_32 = murmur3::murmur3_32(&mut Cursor::new(&data), 0x32d0_babe);
         let mut program_hash = vec![];
-        program_hash.write_u32::<LittleEndian>(program_hash_32).unwrap();
+        program_hash
+            .write_u32::<LittleEndian>(program_hash_32)
+            .unwrap();
         self.append_data(&mut packet, &program_hash);
 
         let mut program_guid_hasher = Md5::new();
@@ -191,22 +194,24 @@ impl Controller {
                         packet[i + data_header_len] ^= 0xaa;
                     }
                 }
-            },
+            }
 
-            ProtocolVersion::V2 =>
+            ProtocolVersion::V2 => {
                 // modulate the packet # and payload
                 // so skip preamble + version + type (7 bytes preamble + 1 byte version + 1 byte type = 9)
                 // and then "add 2" in the modular math loop because on the demod side we are 2-offset
                 // also skip capping hash and stop bytes
-                for i in (self.preamble.len() + 2)..(packet.len() - (4 + self.stop_bytes.len())) {
-                    if ((i-9+2) % 3) == 0 {
+                let mod_range = (self.preamble.len() + 2)..(packet.len() - (4 + self.stop_bytes.len()));
+                for i in mod_range {
+                    if ((i - 9 + 2) % 3) == 0 {
                         packet[i] ^= 0x35;
-                    } else if ((i-9+2) % 3) == 1 {
+                    } else if ((i - 9 + 2) % 3) == 1 {
                         packet[i] ^= 0xac;
-                    } else if ((i-9+2) % 3) == 2 {
+                    } else if ((i - 9 + 2) % 3) == 2 {
                         packet[i] ^= 0x95;
                     }
-                },
+                }
+            }
         }
 
         packet
@@ -241,7 +246,6 @@ impl Controller {
             // let mut audio = self.modulator.modulate_pcm(&data);
             // output.append(&mut audio);
             //
-
         }
     }
 
